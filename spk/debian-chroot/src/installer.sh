@@ -27,8 +27,7 @@ postinst ()
     ${VIRTUALENV} --system-site-packages ${INSTALL_DIR}/env > /dev/null
 
     # Install the bundle
-    ${INSTALL_DIR}/env/bin/pip install -U -b ${INSTALL_DIR}/var/build ${INSTALL_DIR}/share/requirements.pybundle > /dev/null
-    rm -fr ${INSTALL_DIR}/var/build
+    ${INSTALL_DIR}/env/bin/pip install --no-index -U ${INSTALL_DIR}/share/requirements.pybundle > /dev/null
 
     # Setup the database
     ${INSTALL_DIR}/env/bin/python ${INSTALL_DIR}/app/setup.py
@@ -45,19 +44,11 @@ postinst ()
         cp /etc/hosts /etc/hostname /etc/resolv.conf ${CHROOTTARGET}/etc/
     fi
 
-	# Index help files
-	pkgindexer_add ${INSTALL_DIR}/app/index.conf > /dev/null
-	pkgindexer_add ${INSTALL_DIR}/app/helptoc.conf > /dev/null
-
     exit 0
 }
 
 preuninst ()
 {
-	# Remove help files
-	pkgindexer_del ${INSTALL_DIR}/app/index.conf > /dev/null
-	pkgindexer_del ${INSTALL_DIR}/app/helptoc.conf > /dev/null
-
     exit 0
 }
 

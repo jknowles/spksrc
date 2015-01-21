@@ -8,8 +8,9 @@ DNAME="Selfoss"
 INSTALL_DIR="/usr/local/${PACKAGE}"
 SSS="/var/packages/${PACKAGE}/scripts/start-stop-status"
 WEB_DIR="/var/services/web"
-USER="nobody"
+USER="$([ $(grep buildnumber /etc.defaults/VERSION | cut -d"\"" -f2) -ge 4418 ] && echo -n http || echo -n nobody)"
 MYSQL="/usr/syno/mysql/bin/mysql"
+MYSQLDUMP="/usr/syno/mysql/bin/mysqldump"
 MYSQL_USER="selfoss"
 MYSQL_DATABASE="selfoss"
 TMP_DIR="${SYNOPKG_PKGDEST}/../../@tmp"
@@ -45,19 +46,19 @@ postinst ()
     ${INSTALL_DIR}/bin/busybox --install ${INSTALL_DIR}/bin
 
     # Install the web interface
-    cp -R ${INSTALL_DIR}/share/${PACKAGE} ${WEB_DIR}
+    cp -pR ${INSTALL_DIR}/share/${PACKAGE} ${WEB_DIR}
 
     # Setup database and configuration file
     if [ "${SYNOPKG_PKG_STATUS}" == "INSTALL" ]; then
         ${MYSQL} -u root -p"${wizard_mysql_password_root}" -e "CREATE DATABASE ${MYSQL_DATABASE}; GRANT ALL PRIVILEGES ON ${MYSQL_DATABASE}.* TO '${MYSQL_USER}'@'localhost' IDENTIFIED BY '${wizard_mysql_password_selfoss}';"
-        sed -i -e "s|^db_type=.*$|db_type=mysql|" \
-               -e "s|^db_host=.*$|db_host=localhost|" \
-               -e "s|^db_port=.*$|db_port=3306|" \
-               -e "s|^db_username=.*$|db_username=${MYSQL_USER}|" \
-               -e "s|^db_password=.*$|db_password=${wizard_mysql_password_selfoss}|" \
-               -e "s|^salt=.*$|salt=$(openssl rand -hex 8)|" \
-               -e "s|\r\n$|\n|" \
-               ${WEB_DIR}/${PACKAGE}/config.ini
+        echo -e "[globals]" \
+                "\ndb_type=mysql" \
+                "\ndb_host=localhost" \
+                "\ndb_port=3306" \
+                "\ndb_username=${MYSQL_USER}" \
+                "\ndb_password=${wizard_mysql_password_selfoss}" \
+                "\nsalt=$(openssl rand -hex 8)" \
+                > ${WEB_DIR}/${PACKAGE}/config.ini
     fi
 
     # Fix permissions
@@ -70,9 +71,17 @@ postinst ()
 preuninst ()
 {
     # Check database
-    if [ "${SYNOPKG_PKG_STATUS}" == "UNINSTALL" -a "${wizard_remove_database}" == "true" ] && ! ${MYSQL} -u root -p"${wizard_mysql_password_root}" -e quit > /dev/null 2>&1; then
+    if [ "${SYNOPKG_PKG_STATUS}" == "UNINSTALL" ] && ! ${MYSQL} -u root -p"${wizard_mysql_password_root}" -e quit > /dev/null 2>&1; then
         echo "Incorrect MySQL root password"
         exit 1
+    fi
+
+    # Check database export location
+    if [ "${SYNOPKG_PKG_STATUS}" == "UNINSTALL" -a -n "${wizard_dbexport_path}" ]; then
+        if [ -f "${wizard_dbexport_path}" -o -e "${wizard_dbexport_path}/${MYSQL_DATABASE}.sql" ]; then
+            echo "File ${wizard_dbexport_path}/${MYSQL_DATABASE}.sql already exists. Please remove or choose a different location"
+            exit 1
+        fi
     fi
 
     # Stop the package
@@ -86,8 +95,12 @@ postuninst ()
     # Remove link
     rm -f ${INSTALL_DIR}
 
-    # Remove database
-    if [ "${SYNOPKG_PKG_STATUS}" == "UNINSTALL" -a "${wizard_remove_database}" == "true" ]; then
+    # Export and remove database
+    if [ "${SYNOPKG_PKG_STATUS}" == "UNINSTALL" ]; then
+        if [ -n "${wizard_dbexport_path}" ]; then
+            mkdir -p ${wizard_dbexport_path}
+            ${MYSQLDUMP} -u root -p"${wizard_mysql_password_root}" ${MYSQL_DATABASE} > ${wizard_dbexport_path}/${MYSQL_DATABASE}.sql
+        fi
         ${MYSQL} -u root -p"${wizard_mysql_password_root}" -e "DROP DATABASE ${MYSQL_DATABASE}; DROP USER '${MYSQL_USER}'@'localhost';"
     fi
 
@@ -106,20 +119,16 @@ preupgrade ()
     rm -fr ${TMP_DIR}/${PACKAGE}
     mkdir -p ${TMP_DIR}/${PACKAGE}
     mv ${WEB_DIR}/${PACKAGE}/config.ini ${TMP_DIR}/${PACKAGE}/
+    mv ${WEB_DIR}/${PACKAGE}/data ${TMP_DIR}/${PACKAGE}/
 
     exit 0
 }
 
 postupgrade ()
 {
-    # Restore the configuration file if it has not been updated
-    old_config_lines=$(wc -l ${TMP_DIR}/${PACKAGE}/config.ini | cut -f1 -d' ')
-    new_config_lines=$(wc -l ${WEB_DIR}/${PACKAGE}/config.ini | cut -f1 -d' ')
-    if [ ${old_config_lines} -ne ${new_config_lines} ]; then
-        mv ${WEB_DIR}/${PACKAGE}/config.ini ${WEB_DIR}/${PACKAGE}/config.ini.new
-        echo "Configuration file web/${PACKAGE}/config.ini needs to be updated manually. See web/selfoss/config.ini.new for changes to apply."
-    fi
+    # Restore the configuration file
     mv ${TMP_DIR}/${PACKAGE}/config.ini ${WEB_DIR}/${PACKAGE}/
+    cp -r ${TMP_DIR}/${PACKAGE}/data ${WEB_DIR}/${PACKAGE}/
     rm -fr ${TMP_DIR}/${PACKAGE}
 
     exit 0

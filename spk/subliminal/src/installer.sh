@@ -32,18 +32,13 @@ postinst ()
     ${VIRTUALENV} --system-site-packages ${INSTALL_DIR}/env > /dev/null
 
     # Install the bundle
-    ${INSTALL_DIR}/env/bin/pip install -U -b ${INSTALL_DIR}/var/build ${INSTALL_DIR}/share/requirements.pybundle > /dev/null
-    rm -fr ${INSTALL_DIR}/var/build
+    ${INSTALL_DIR}/env/bin/pip install --no-index -U ${INSTALL_DIR}/share/requirements.pybundle > /dev/null
 
     # Setup the database
     ${INSTALL_DIR}/env/bin/python ${INSTALL_DIR}/app/setup.py
 
     # Correct the files ownership
     chown -R ${USER}:root ${SYNOPKG_PKGDEST}
-
-    # Index help files
-    pkgindexer_add ${INSTALL_DIR}/app/index.conf > /dev/null
-    pkgindexer_add ${INSTALL_DIR}/app/helptoc.conf > /dev/null
 
     exit 0
 }
@@ -58,10 +53,6 @@ preuninst ()
         delgroup ${USER} ${GROUP}
         deluser ${USER}
     fi
-
-    # Remove help files
-    pkgindexer_del ${INSTALL_DIR}/app/index.conf > /dev/null
-    pkgindexer_del ${INSTALL_DIR}/app/helptoc.conf > /dev/null
 
     exit 0
 }

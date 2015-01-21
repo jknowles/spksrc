@@ -1,6 +1,6 @@
 SPK_NAME = haproxy
-SPK_VERS = 1.5~dev18
-SPK_REV = 8
+SPK_VERS = 1.5.8
+SPK_REV = 16
 SPK_ICON = src/haproxy.png
 DSM_UI_DIR = app
 
@@ -13,14 +13,17 @@ DESCRIPTION_FRE = HAProxy est un produit libre, performant et fiable qui permet 
 ADMIN_PORT = 8280
 RELOAD_UI = yes
 DISPLAY_NAME = HAProxy
+CHANGELOG = "1. Update to 1.5.8<br>2. Improve SSL security"
 
 HOMEPAGE   = http://haproxy.1wt.eu/
 LICENSE    = GNU GPL 2
+HELPURL    = http://synocommunity.com/help/haproxy
 
 WIZARDS_DIR = src/wizard/
 
 INSTALLER_SCRIPT = src/installer.sh
 SSS_SCRIPT       = src/dsm-control.sh
+FWPORTS          = src/${SPK_NAME}.sc
 
 INSTALL_PREFIX = /usr/local/$(SPK_NAME)
 
@@ -35,8 +38,6 @@ haproxy_extra_install: $(STAGING_DIR)/share/requirements.pybundle
 	install -m 755 -d $(STAGING_DIR)/app
 	install -m 644 src/haproxy.cfg $(STAGING_DIR)/var/haproxy.cfg.tpl
 	install -m 644 src/app/config $(STAGING_DIR)/app/config
-	install -m 644 src/app/index.conf $(STAGING_DIR)/app/index.conf
-	install -m 644 src/app/helptoc.conf $(STAGING_DIR)/app/helptoc.conf
 	install -m 644 src/app/style.css $(STAGING_DIR)/app/style.css
 	install -m 644 src/app/haproxy.js $(STAGING_DIR)/app/haproxy.js
 	install -m 755 src/app/setup.py $(STAGING_DIR)/app/setup.py
@@ -44,16 +45,13 @@ haproxy_extra_install: $(STAGING_DIR)/share/requirements.pybundle
 	install -m 755 -d $(STAGING_DIR)/app/application
 	install -m 644 src/app/application/* $(STAGING_DIR)/app/application/
 	install -m 755 -d $(STAGING_DIR)/app/texts
-	install -m 755 -d $(STAGING_DIR)/app/help
 	for language in enu fre; do \
 		install -m 755 -d $(STAGING_DIR)/app/texts/$${language}; \
-		install -m 755 -d $(STAGING_DIR)/app/help/$${language}; \
 		install -m 644 src/app/texts/$${language}/strings $(STAGING_DIR)/app/texts/$${language}/strings; \
-		install -m 644 src/app/help/$${language}/*.html $(STAGING_DIR)/app/help/$${language}/; \
 	done
 	install -m 755 -d $(STAGING_DIR)/app/images
 	install -m 644 src/app/images/*.png $(STAGING_DIR)/app/images/
-	for size in 16 24 32 48; do \
+	for size in 16 24 32 48 72; do \
 		convert $(SPK_ICON) -thumbnail $${size}x$${size} \
 		        $(STAGING_DIR)/app/images/$(SPK_NAME)-$${size}.png ; \
 	done

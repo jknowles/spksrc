@@ -6,6 +6,7 @@ DNAME="LIRC"
 
 # Others
 INSTALL_DIR="/usr/local/${PACKAGE}"
+INSTALLER_SCRIPT=`dirname $0`/installer
 PATH="${PATH}:${INSTALL_DIR}/bin:/usr/local/bin:/bin:/usr/bin:/usr/syno/bin"
 DAEMON="${INSTALL_DIR}/sbin/lircd"
 PID_FILE="${INSTALL_DIR}/var/lircd.pid"
@@ -13,22 +14,60 @@ CONF_FILE="${INSTALL_DIR}/etc/lirc/lircd.conf"
 IREXEC="${INSTALL_DIR}/bin/irexec"
 LIRCRC_FILE="${INSTALL_DIR}/etc/lirc/lircrc"
 LOG_FILE="${INSTALL_DIR}/var/log/lircd"
+VERSION_FILE="${INSTALL_DIR}/etc/DSM_VERSION"
+
+SELECTED_LIRC_DRIVER=@driver@
 
 
 load_unload_drivers ()
 {
     case $1 in
         load)
-            insmod ${INSTALL_DIR}/lib/modules/lirc_dev.ko
-            for DRIVER in `find ${INSTALL_DIR}/lib/modules/ -type f -print | grep -v lirc_dev.ko`; do
-                insmod $DRIVER
-            done
+            case $2 in
+                mceusb)
+                    insmod ${INSTALL_DIR}/lib/modules/lirc_dev.ko
+                    insmod ${INSTALL_DIR}/lib/modules/lirc_${2}.ko
+                ;;
+                uirt)
+                    insmod ${INSTALL_DIR}/lib/modules/lirc_dev.ko
+                    insmod /lib/modules/usbserial.ko
+                    insmod /lib/modules/ftdi_sio.ko
+                    stty -F /dev/usb/ttyUSB0 1200 sane evenp parenb cs7 -crtscts
+                    LIRC_STARTUP_PARAMS="--device=/dev/usb/ttyUSB0 --driver=usb_uirt_raw"
+                ;;
+                uirt2)
+                    insmod ${INSTALL_DIR}/lib/modules/lirc_dev.ko
+                    insmod /lib/modules/usbserial.ko
+                    insmod /lib/modules/ftdi_sio.ko
+                    stty -F /dev/usb/ttyUSB0 1200 sane evenp parenb cs7 -crtscts
+                    LIRC_STARTUP_PARAMS="--device=/dev/usb/ttyUSB0 --driver=uirt2_raw"
+                ;;
+                irtoy)
+                    # Not yet supported. Here for example only.
+                ;;
+                *)
+                    # Not yet supported.
+                ;;
+            esac
         ;;
         unload)
-            for DRIVER in `find ${INSTALL_DIR}/lib/modules/ -type f -print | grep -v lirc_dev.ko`; do
-                rmmod $DRIVER
-            done
-            rmmod ${INSTALL_DIR}/lib/modules/lirc_dev.ko
+            case $2 in
+                mceusb)
+                    rmmod ${INSTALL_DIR}/lib/modules/lirc_${2}.ko
+                    rmmod ${INSTALL_DIR}/lib/modules/lirc_dev.ko
+                ;;
+                uirt|uirt2)
+                    rmmod /lib/modules/ftdi_sio.ko
+                    rmmod /lib/modules/usbserial.ko
+                    rmmod ${INSTALL_DIR}/lib/modules/lirc_dev.ko
+                ;;
+                irtoy)
+                    # Not yet supported. Here for example only.
+                ;;
+                *)
+                    # Not yet supported.
+                ;;
+            esac
         ;;
     esac
 
@@ -36,14 +75,10 @@ load_unload_drivers ()
 
 start_daemon ()
 {
-    # Added case for "all" drivers
-    #load_unload_drivers load
+    # Call function to load driver - validation happens inside
+    load_unload_drivers load $SELECTED_LIRC_DRIVER
 
-    # This code will update is a specific valid driver is selected during installation
-    #insmod ${INSTALL_DIR}/lib/modules/lirc_dev.ko
-    #insmod ${INSTALL_DIR}/lib/modules/lirc_@driver@.ko
-
-    ${DAEMON} ${CONF_FILE} --pidfile=${PID_FILE} --logfile=${LOG_FILE}
+    ${DAEMON} ${LIRC_STARTUP_PARAMS} ${CONF_FILE} --pidfile=${PID_FILE} --logfile=${LOG_FILE}
     if [ -e ${LIRCRC_FILE} ]; then
         ${IREXEC} -d ${LIRCRC_FILE}
     fi
@@ -63,12 +98,8 @@ stop_daemon ()
 
     test -e ${PID_FILE} || rm -f ${PID_FILE}
 
-    # This code will update is a specific valid driver is selected during installation
-    #rmmod ${INSTALL_DIR}/lib/modules/lirc_@driver@.ko
-    #rmmod ${INSTALL_DIR}/lib/modules/lirc_dev.ko
-
-    # Added case for "all" drivers
-    #load_unload_drivers unload
+    # Call function to unload driver - validation happens inside
+    load_unload_drivers unload $SELECTED_LIRC_DRIVER
 }
 
 daemon_status ()
@@ -92,6 +123,22 @@ wait_for_status ()
     return 1
 }
 
+check_dsm_version ()
+{
+    if [ -f ${VERSION_FILE} ]; then
+        diff -qw /etc.defaults/VERSION ${VERSION_FILE} 2>&1 >/dev/null
+        if [ $? -ne 0 ]; then
+            echo -n "DSM version has changed, re-running driver setup..."
+            . ${INSTALLER_SCRIPT}
+            lirc_install_drivers ${SELECTED_LIRC_DRIVER}
+            cp /etc.defaults/VERSION ${VERSION_FILE}
+            echo done.
+        fi
+    else
+        echo "First time starting, capturing DSM version"
+        cp /etc.defaults/VERSION ${VERSION_FILE}
+    fi
+}
 
 case $1 in
     start)
@@ -99,6 +146,8 @@ case $1 in
             echo ${DNAME} is already running
             exit 0
         else
+            # Check if DSM was upgraded
+            check_dsm_version
             echo Starting ${DNAME} ...
             start_daemon
             exit $?
@@ -124,6 +173,9 @@ case $1 in
         ;;
     log)
         echo ${LOG_FILE}
+        ;;
+    driver)
+        echo ${SELECTED_LIRC_DRIVER}
         ;;
     *)
         exit 1

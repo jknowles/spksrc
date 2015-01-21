@@ -14,14 +14,15 @@ USER="sickbeard-custom"
 GROUP="users"
 GIT="${GIT_DIR}/bin/git"
 VIRTUALENV="${PYTHON_DIR}/bin/virtualenv"
-CFG_FILE="${INSTALL_DIR}/var/config.ini"
 TMP_DIR="${SYNOPKG_PKGDEST}/../../@tmp"
 
+SERVICETOOL="/usr/syno/bin/servicetool"
+FWPORTS="/var/packages/${PACKAGE}/scripts/${PACKAGE}.sc"
 
 preinst ()
 {
     # Check fork
-    if [ "${SYNOPKG_PKG_STATUS}" != "UPGRADE" ] && ! ${GIT} ls-remote --heads --exit-code ${wizard_fork_url:=git://github.com/mr-orange/Sick-Beard.git} ${wizard_fork_branch:=Pistachitos} > /dev/null 2>&1; then
+    if [ "${SYNOPKG_PKG_STATUS}" == "INSTALL" ] && ! ${GIT} ls-remote --heads --exit-code ${wizard_fork_url:=git://github.com/mr-orange/Sick-Beard.git} ${wizard_fork_branch:=Pistachitos} > /dev/null 2>&1; then
         echo "Incorrect fork"
         exit 1
     fi
@@ -49,6 +50,9 @@ postinst ()
     # Correct the files ownership
     chown -R ${USER}:root ${SYNOPKG_PKGDEST}
 
+    # Add firewall config
+    ${SERVICETOOL} --install-configure-file --package ${FWPORTS} >> /dev/null
+
     exit 0
 }
 
@@ -57,10 +61,15 @@ preuninst ()
     # Stop the package
     ${SSS} stop > /dev/null
 
-    # Remove the user (if not upgrading)
-    if [ "${SYNOPKG_PKG_STATUS}" != "UPGRADE" ]; then
+    # Remove the user if uninstalling
+    if [ "${SYNOPKG_PKG_STATUS}" == "UNINSTALL" ]; then
         delgroup ${USER} ${GROUP}
         deluser ${USER}
+    fi
+
+    # Remove firewall config
+    if [ "${SYNOPKG_PKG_STATUS}" == "UNINSTALL" ]; then
+        ${SERVICETOOL} --remove-configure-file --package ${PACKAGE}.sc >> /dev/null
     fi
 
     exit 0

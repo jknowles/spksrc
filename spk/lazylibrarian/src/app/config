@@ -5,8 +5,11 @@
             "desc": "LazyLibrarian Web UI",
             "icon": "images/lazylibrarian-{0}.png",
             "type": "url",
-            "url": "3rdparty/lazylibrarian/lazylibrarian.cgi",
-            "allUsers": true
+            "protocol": "http",
+            "port": "8082",
+            "url": "/",
+            "allUsers": true,
+            "grantPrivilege": "local"
         }
     }
 }

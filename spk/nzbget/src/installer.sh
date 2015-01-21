@@ -13,9 +13,19 @@ GROUP="users"
 CFG_FILE="${INSTALL_DIR}/var/nzbget.conf"
 TMP_DIR="${SYNOPKG_PKGDEST}/../../@tmp"
 
+SERVICETOOL="/usr/syno/bin/servicetool"
+FWPORTS="/var/packages/${PACKAGE}/scripts/${PACKAGE}.sc"
 
 preinst ()
 {
+    # Check directory
+    if [ "${SYNOPKG_PKG_STATUS}" == "INSTALL" ]; then
+        if [ ! -d ${wizard_download_dir:=/volume1/downloads} ]; then
+            echo "Download directory ${wizard_download_dir} does not exist."
+            exit 1
+        fi
+    fi
+
     exit 0
 }
 
@@ -30,12 +40,24 @@ postinst ()
     # Create user
     adduser -h ${INSTALL_DIR}/var -g "${DNAME} User" -G ${GROUP} -s /bin/sh -S -D ${USER}
 
-    # Edit the configuration according to the wizard
-    sed -i -e "s|@download_dir@|${wizard_download_dir:=/volume1/downloads}|g" ${CFG_FILE}
-    sed -i -e "s/@server_password@/${wizard_server_password:=nzbget}/g" ${CFG_FILE}
+    if [ "${SYNOPKG_PKG_STATUS}" == "INSTALL" ]; then
+        # Edit the configuration according to the wizard
+        sed -i -e "s|@download_dir@|${wizard_download_dir:=/volume1/downloads}|g" \
+               -e "s/@control_username@/${wizard_control_username:=nzbget}/g" \
+               -e "s/@control_password@/${wizard_control_password:=nzbget}/g" \
+               ${CFG_FILE}
+        # Set group and permissions on download dir for DSM5
+        if [ `/bin/get_key_value /etc.defaults/VERSION buildnumber` -ge "4418" ]; then
+            chgrp users ${wizard_download_dir:=/volume1/downloads}
+            chmod g+rw ${wizard_download_dir:=/volume1/downloads}
+        fi
+    fi
 
     # Correct the files ownership
     chown -R ${USER}:root ${SYNOPKG_PKGDEST}
+
+    # Add firewall config
+    ${SERVICETOOL} --install-configure-file --package ${FWPORTS} >> /dev/null
 
     exit 0
 }
@@ -49,6 +71,11 @@ preuninst ()
     if [ "${SYNOPKG_PKG_STATUS}" != "UPGRADE" ]; then
         delgroup ${USER} ${GROUP}
         deluser ${USER}
+    fi
+
+    # Remove firewall config
+    if [ "${SYNOPKG_PKG_STATUS}" == "UNINSTALL" ]; then
+        ${SERVICETOOL} --remove-configure-file --package ${PACKAGE}.sc >> /dev/null
     fi
 
     exit 0
@@ -67,8 +94,8 @@ preupgrade ()
     # Stop the package
     ${SSS} stop > /dev/null
 
-    # Revision 8 introduces backward incompatible changes
-    if [ `echo ${SYNOPKG_OLD_PKGVER} | sed -r "s/^.*-([0-9]+)$/\1/"` -lt 8 ]; then
+    # Revision 9 introduces backward incompatible changes
+    if [ `echo ${SYNOPKG_OLD_PKGVER} | sed -r "s/^.*-([0-9]+)$/\1/"` -lt 9 ]; then
         echo "Please uninstall previous version, no update possible"
         exit 1
     fi

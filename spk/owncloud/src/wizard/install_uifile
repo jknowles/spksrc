@@ -23,6 +23,7 @@
         "subitems": [{
             "key": "wizard_owncloud_admin_username",
             "desc": "User name",
+            "defaultValue": "admin",
             "validator": {
                 "allowBlank": false
             }
@@ -33,6 +34,7 @@
         "subitems": [{
             "key": "wizard_owncloud_admin_password",
             "desc": "Password",
+            "defaultValue": "admin",
             "validator": {
                 "allowBlank": false
             }

@@ -1,6 +1,6 @@
 SPK_NAME = nzbget
-SPK_VERS = 10.2
-SPK_REV = 8
+SPK_VERS = 14.1
+SPK_REV = 14
 SPK_ICON = src/nzbget.png
 DSM_UI_DIR = app
 
@@ -13,7 +13,7 @@ DESCRIPTION_SPN = NZBGet es una aplicación de linea de comandos escrita en C++ 
 RELOAD_UI = yes
 ADMIN_PORT = 6789
 DISPLAY_NAME = NZBGet
-CHANGELOG = "1. Uninstallation required"
+CHANGELOG = "1. Update NZBGet to 14.1"
 
 HOMEPAGE = http://nzbget.sourceforge.net/
 LICENSE  =
@@ -22,6 +22,7 @@ WIZARDS_DIR = src/wizard/
 
 INSTALLER_SCRIPT = src/installer.sh
 SSS_SCRIPT       = src/dsm-control.sh
+FWPORTS          = src/${SPK_NAME}.sc
 
 INSTALL_PREFIX = /usr/local/$(SPK_NAME)
 
@@ -33,17 +34,20 @@ ENV += BUSYBOX_CONFIG="$(BUSYBOX_CONFIG)"
 include ../../mk/spksrc.spk.mk
 
 .PHONY: nzbget_extra_install
-nzbget_extra_install:
+nzbget_extra_install: $(STAGING_DIR)/share/nzbget/scripts/nzbToMedia
 	install -m 755 -d $(STAGING_DIR)/var
 	install -m 644 src/nzbget.conf $(STAGING_DIR)/var/nzbget.conf
-	install -m 755 src/nzbget-postprocess.sh $(STAGING_DIR)/bin/nzbget-postprocess.sh
-	install -m 644 src/nzbget-postprocess.conf $(STAGING_DIR)/var/nzbget-postprocess.conf
-	install -m 644 src/nzbget-postprocess.conf $(STAGING_DIR)/share/nzbget/webui/nzbget-postprocess.conf
+	install -m 644 src/nzbget.conf.template $(STAGING_DIR)/share/nzbget/nzbget.conf
 	install -m 755 -d $(STAGING_DIR)/app
 	install -m 644 src/app/config $(STAGING_DIR)/app/config
 	install -m 755 -d $(STAGING_DIR)/app/texts
 	install -m 755 -d $(STAGING_DIR)/app/images
-	for size in 16 24 32 48; do \
+	for size in 16 24 32 48 72; do \
 		convert $(SPK_ICON) -thumbnail $${size}x$${size} \
 		        $(STAGING_DIR)/app/images/$(SPK_NAME)-$${size}.png ; \
 	done
+
+$(STAGING_DIR)/share/nzbget/scripts/nzbToMedia:
+	cd $(STAGING_DIR)/share/nzbget/scripts && git clone https://github.com/clinton-hall/nzbToMedia.git
+	rm -fr $(STAGING_DIR)/share/nzbget/scripts/nzbToMedia/.git*
+

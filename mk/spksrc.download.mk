@@ -17,10 +17,14 @@ PRE_DOWNLOAD_TARGET = pre_download_target
 else
 $(PRE_DOWNLOAD_TARGET): download_msg
 endif
-ifeq ($(strip $(DOWNLOAD_TARGET)),)
-DOWNLOAD_TARGET = download_target
+ifneq (,$(findstring nop,$(strip $(DOWNLOAD_TARGET))))
+DOWNLOAD_TARGET = nop_download_target
 else
-$(DOWNLOAD_TARGET): $(PRE_DOWNLOAD_TARGET)
+  ifeq ($(strip $(DOWNLOAD_TARGET)),)
+  DOWNLOAD_TARGET = download_target
+  else
+  $(DOWNLOAD_TARGET): $(PRE_DOWNLOAD_TARGET)
+  endif
 endif
 ifeq ($(strip $(POST_DOWNLOAD_TARGET)),)
 POST_DOWNLOAD_TARGET = post_download_target
@@ -33,6 +37,18 @@ endif
 
 download_msg:
 	@$(MSG) "Downloading files for $(NAME)"
+	
+nop_download_target:
+	@nop_file=$(PKG_DIST_FILE) ; \
+	if [ -z "$$nop_file" ] ; then \
+	  nop_file=$(PKG_DIST_NAME) ; \
+	fi ; \
+	if [ -f "$(DISTRIB_DIR)/$$nop_file" ] ; then \
+	  $(MSG) "File $$nop_file already downloaded" ; \
+	else \
+	  $(MSG) "Please download $$nop_file manually from $(PKG_DIST_SITE), and place in $(DISTRIB_DIR)" ; \
+	exit 1 ; \
+	fi ; \
 
 pre_download_target: download_msg
 
@@ -80,6 +96,30 @@ download_target: $(PRE_DOWNLOAD_TARGET)
 	        ln -s $${localFile} $${localHead} ; \
 	      fi ; \
 	      ;; \
+	    hg) \
+	      if [ "$(PKG_HG_REV)" = "tip" ]; then \
+	        rev=`hg identify -r "tip" $${url}` ; \
+	      else \
+	        rev=$(PKG_HG_REV) ; \
+	      fi ; \
+	      localFolder=$(NAME)-r$${rev} ; \
+	      localFile=$${localFolder}.tar.gz ; \
+	      localTip=$(NAME)-rtip.tar.gz ; \
+	      if [ ! -f $${localFile} ]; then \
+	        rm -fr $${localFolder}.part ; \
+	        echo "hg clone -r $${rev} $${url}" ; \
+	        hg clone -r $${rev} $${url} $${localFolder}.part ; \
+	        mv $${localFolder}.part $${localFolder} ; \
+	        tar --exclude-vcs -czf $${localFile} $${localFolder} ; \
+	        rm -fr $${localFolder} ; \
+	      else \
+	        $(MSG) "  File $${localFile} already downloaded" ; \
+	      fi ; \
+	      if [ "$(PKG_HG_REV)" = "tip" ]; then \
+	        rm -f $${localTip} ; \
+	        ln -s $${localFile} $${localTip} ; \
+	      fi ; \
+	      ;; \
 	    *) \
 	      localFile=$(PKG_DIST_FILE) ; \
 	      if [ -z "$${localFile}" ]; then \
@@ -89,7 +129,7 @@ download_target: $(PRE_DOWNLOAD_TARGET)
 	        rm -f $${localFile}.part ; \
 	        url=`echo $${url} | sed -e '#^\(http://sourceforge\.net/.*\)$#\1?use_mirror=autoselect#'` ; \
 	        echo "wget $${url}" ; \
-	        wget -nv -O $${localFile}.part $${url} ; \
+	        wget $(DOWNLOAD_ARGS) -nv -O $${localFile}.part $${url} ; \
 	        mv $${localFile}.part $${localFile} ; \
 	      else \
 	        $(MSG) "  File $${localFile} already downloaded" ; \
@@ -109,4 +149,3 @@ $(DOWNLOAD_COOKIE): $(POST_DOWNLOAD_TARGET)
 else
 download: ;
 endif
-

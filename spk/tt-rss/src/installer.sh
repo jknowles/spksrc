@@ -8,8 +8,9 @@ DNAME="Tiny Tiny RSS"
 INSTALL_DIR="/usr/local/${PACKAGE}"
 SSS="/var/packages/${PACKAGE}/scripts/start-stop-status"
 WEB_DIR="/var/services/web"
-USER="nobody"
+USER="$([ $(grep buildnumber /etc.defaults/VERSION | cut -d"\"" -f2) -ge 4418 ] && echo -n http || echo -n nobody)"
 MYSQL="/usr/syno/mysql/bin/mysql"
+MYSQLDUMP="/usr/syno/mysql/bin/mysqldump"
 MYSQL_USER="ttrss"
 MYSQL_DATABASE="ttrss"
 TMP_DIR="${SYNOPKG_PKGDEST}/../../@tmp"
@@ -45,7 +46,7 @@ postinst ()
     ${INSTALL_DIR}/bin/busybox --install ${INSTALL_DIR}/bin
 
     # Install the web interface
-    cp -R ${INSTALL_DIR}/share/${PACKAGE} ${WEB_DIR}
+    cp -pR ${INSTALL_DIR}/share/${PACKAGE} ${WEB_DIR}
 
     # Setup database and configuration file
     if [ "${SYNOPKG_PKG_STATUS}" == "INSTALL" ]; then
@@ -72,9 +73,17 @@ postinst ()
 preuninst ()
 {
     # Check database
-    if [ "${SYNOPKG_PKG_STATUS}" == "UNINSTALL" -a "${wizard_remove_database}" == "true" ] && ! ${MYSQL} -u root -p"${wizard_mysql_password_root}" -e quit > /dev/null 2>&1; then
+    if [ "${SYNOPKG_PKG_STATUS}" == "UNINSTALL" ] && ! ${MYSQL} -u root -p"${wizard_mysql_password_root}" -e quit > /dev/null 2>&1; then
         echo "Incorrect MySQL root password"
         exit 1
+    fi
+
+    # Check database export location
+    if [ "${SYNOPKG_PKG_STATUS}" == "UNINSTALL" -a -n "${wizard_dbexport_path}" ]; then
+        if [ -f "${wizard_dbexport_path}" -o -e "${wizard_dbexport_path}/${MYSQL_DATABASE}.sql" ]; then
+            echo "File ${wizard_dbexport_path}/${MYSQL_DATABASE}.sql already exists. Please remove or choose a different location"
+            exit 1
+        fi
     fi
 
     # Stop the package
@@ -88,8 +97,12 @@ postuninst ()
     # Remove link
     rm -f ${INSTALL_DIR}
 
-    # Remove database
-    if [ "${SYNOPKG_PKG_STATUS}" == "UNINSTALL" -a "${wizard_remove_database}" == "true" ]; then
+    # Export and remove database
+    if [ "${SYNOPKG_PKG_STATUS}" == "UNINSTALL" ]; then
+        if [ -n "${wizard_dbexport_path}" ]; then
+            mkdir -p ${wizard_dbexport_path}
+            ${MYSQLDUMP} -u root -p"${wizard_mysql_password_root}" ${MYSQL_DATABASE} > ${wizard_dbexport_path}/${MYSQL_DATABASE}.sql
+        fi
         ${MYSQL} -u root -p"${wizard_mysql_password_root}" -e "DROP DATABASE ${MYSQL_DATABASE}; DROP USER '${MYSQL_USER}'@'localhost';"
     fi
 
@@ -109,18 +122,31 @@ preupgrade ()
     mkdir -p ${TMP_DIR}/${PACKAGE}
     mv ${WEB_DIR}/${PACKAGE}/config.php ${TMP_DIR}/${PACKAGE}/
 
+    mkdir ${TMP_DIR}/${PACKAGE}/feed-icons/
+    mv ${WEB_DIR}/${PACKAGE}/feed-icons/*.ico ${TMP_DIR}/${PACKAGE}/feed-icons/
+
     exit 0
 }
 
 postupgrade ()
 {
-    # Restore the configuration file if it has not been updated
-    old_config_version=$(grep 'CONFIG_VERSION' ${TMP_DIR}/${PACKAGE}/config.php | sed "s/define('CONFIG_VERSION', \([0-9]\+\));/\1/")
-    new_config_version=$(grep 'CONFIG_VERSION' ${WEB_DIR}/${PACKAGE}/config.php-dist | sed "s/define('CONFIG_VERSION', \([0-9]\+\));/\1/")
-    if [ ${old_config_version} -ne ${new_config_version} ]; then
-        echo "Configuration file web/${PACKAGE}/config.php needs to be updated manually. See web/${PACKAGE}/config.php-dist for changes to apply."
-    fi
-    mv ${TMP_DIR}/${PACKAGE}/config.php ${WEB_DIR}/${PACKAGE}/
+    # Restore the configuration file
+    mv ${TMP_DIR}/${PACKAGE}/config.php ${WEB_DIR}/${PACKAGE}/config-bak.php
+    cp ${WEB_DIR}/${PACKAGE}/config.php-dist ${WEB_DIR}/${PACKAGE}/config.php
+
+    # Parse configuration and save to new config
+    while read line
+    do
+        key=`echo $line | sed -n "s|^define('\(.*\)',\(.*\));.*|\1|p"`
+        val=`echo $line | sed -n "s|^define('\(.*\)',\(.*\));.*|\2|p"`
+        if [ "$key" == "" ]; then
+            continue
+        fi
+        sed -i "s|define('$key', .*);|define('$key', $val);|g" ${WEB_DIR}/${PACKAGE}/config.php
+    done < ${WEB_DIR}/${PACKAGE}/config-bak.php
+
+    mv ${TMP_DIR}/${PACKAGE}/feed-icons/*.ico ${WEB_DIR}/${PACKAGE}/feed-icons/
+
     rm -fr ${TMP_DIR}/${PACKAGE}
 
     exit 0

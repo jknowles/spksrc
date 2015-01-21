@@ -11,8 +11,9 @@ include ../../mk/spksrc.directories.mk
 URLS          = $(TC_DIST_SITE)/$(TC_DIST_NAME)
 NAME          = $(TC_NAME)
 COOKIE_PREFIX = $(TC_NAME)-
-DIST_FILE     = $(DISTRIB_DIR)/$(TC_DIST_NAME)
+DIST_FILE     = $(TOOLCHAINS_DIR)/$(TC_VERS)/$(TC_DIST_NAME)
 DIST_EXT      = $(TC_EXT)
+DISTRIB_DIR   = $(TOOLCHAINS_DIR)/$(TC_VERS)
 
 #####
 
@@ -37,7 +38,7 @@ include ../../mk/spksrc.tc-fix.mk
 all: fix
 
 
-TOOLS = ld cpp nm cc:gcc as ranlib cxx:g++ ar strip objdump readelf
+TOOLS = ld ldshared:"gcc -shared" cpp nm cc:gcc as ranlib cxx:g++ ar strip objdump readelf
 
 CFLAGS += $(TC_CFLAGS)
 CFLAGS += -I$(INSTALL_DIR)/$(INSTALL_PREFIX)/include
@@ -61,7 +62,7 @@ tc_vars: patch
 	do \
 	  target=`echo $${tool} | sed 's/\(.*\):\(.*\)/\1/'` ; \
 	  source=`echo $${tool} | sed 's/\(.*\):\(.*\)/\2/'` ; \
-	  echo TC_ENV += `echo $${target} | tr [:lower:] [:upper:] `=$(WORK_DIR)/$(TC_BASE_DIR)/bin/$(TC_PREFIX)-$${source} ; \
+	  echo TC_ENV += `echo $${target} | tr [:lower:] [:upper:] `=\"$(WORK_DIR)/$(TC_BASE_DIR)/bin/$(TC_PREFIX)-$${source}\" ; \
 	done
 	@echo TC_ENV += CFLAGS=\"$(CFLAGS) $$\(ADDITIONAL_CFLAGS\)\"
 	@echo TC_ENV += CPPFLAGS=\"$(CPPFLAGS) $$\(ADDITIONAL_CPPFLAGS\)\"
@@ -75,6 +76,8 @@ tc_vars: patch
 	@echo CPPFLAGS := $(CPPFLAGS) $$\(ADDITIONAL_CPPFLAGS\)
 	@echo CXXFLAGS := $(CXXFLAGS) $$\(ADDITIONAL_CXXFLAGS\)
 	@echo LDFLAGS := $(LDFLAGS) $$\(ADDITIONAL_LDFLAGS\)
+	@echo TC_FIRMWARE := $(TC_FIRMWARE)
+	@echo TC_ARCH := $(TC_ARCH)
 
 
 ### Clean rules

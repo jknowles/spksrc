@@ -1,19 +1,19 @@
 SPK_NAME = transmission
-SPK_VERS = 2.77
-SPK_REV = 5
+SPK_VERS = 2.84
+SPK_REV = 10
 SPK_ICON = src/transmission.png
 DSM_UI_DIR = app
 
 DEPENDS = cross/busybox cross/$(SPK_NAME)
 
 MAINTAINER = SynoCommunity
-DESCRIPTION = Transmission is an easy and fast BitTorrent client. You can control it remotly with its web interface or dedicated applications.
+DESCRIPTION = Transmission is an easy and fast BitTorrent client. You can control it remotely with its web interface or dedicated applications.
 DESCRIPTION_FRE = Transmission est un client BitTorrent simple et rapide. Vous pouvez le contrôler à distance grâce à son interface web ou des applications dédiées.
 DESCRIPTION_SPN = Transmission es un cliente BitTorrent simple y rápido. Puedes controlarlo remotamente mediante su interfaz web o alguna aplicación dedicada.
 ADMIN_PORT = 9091
 RELOAD_UI = yes
 DISPLAY_NAME = Transmission
-CHANGELOG = "1. Add username/password configuration in wizard"
+CHANGELOG = "Enable ipv6 support"
 
 HOMEPAGE = http://www.transmissionbt.com/
 LICENSE  =
@@ -22,7 +22,7 @@ WIZARDS_DIR = src/wizard/
 
 INSTALLER_SCRIPT = src/installer.sh
 SSS_SCRIPT       = src/dsm-control.sh
-ADDITIONAL_SCRIPTS =
+FWPORTS          = src/${SPK_NAME}.sc
 
 INSTALL_PREFIX = /usr/local/$(SPK_NAME)
 
@@ -39,9 +39,8 @@ transmission_extra_install:
 	install -m 644 src/settings.json $(STAGING_DIR)/var/settings.json
 	install -m 755 -d $(STAGING_DIR)/app
 	install -m 644 src/app/config $(STAGING_DIR)/app/config
-	install -m 755 src/app/transmission.cgi.pl $(STAGING_DIR)/app/transmission.cgi
 	install -m 755 -d $(STAGING_DIR)/app/images
-	for size in 16 24 32 48 ; \
+	for size in 16 24 32 48 72 ; \
 	do \
 	    convert $(SPK_ICON) -thumbnail $${size}x$${size} \
 	            $(STAGING_DIR)/app/images/$(SPK_NAME)-$${size}.png ; \
